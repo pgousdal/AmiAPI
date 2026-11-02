@@ -30,6 +30,7 @@ static struct Library *AmiAPISocketBase = NULL;
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 #include <openssl/rand.h>
+#include <openssl/x509v3.h>
 
 #ifndef AMIAPI_TLS_DEBUG
 #define AMIAPI_TLS_DEBUG 0
@@ -471,6 +472,25 @@ enum AmiAPIError amiapi_transport_start_tls(
 
     if (rc != 1)
         goto fail;
+
+    /*
+     * SSL_VERIFY_PEER only checks the chain.  Also require the certificate
+     * to be valid for this hostname, as transport_posix.c does.
+     */
+    {
+        X509_VERIFY_PARAM *param = SSL_get0_param(ssl);
+
+        if (param == NULL)
+            goto fail;
+
+        X509_VERIFY_PARAM_set_hostflags(
+            param,
+            X509_CHECK_FLAG_NO_PARTIAL_WILDCARDS
+        );
+
+        if (X509_VERIFY_PARAM_set1_host(param, host, 0) != 1)
+            goto fail;
+    }
 
     TLS_DEBUG("TLS: SSL_connect\n");
 
